@@ -1,1 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Минималистичный словарик</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+    <div class="container">
+        <h1>Словарик</h1>
+        <div class="buttons">
+            <button onclick="showWords('forest')">Лес</button>
+            <button onclick="showWords('sport')">Спорт</button>
+        </div>
+        <div id="word-display" class="card">
+            <p>Выберите тему, чтобы увидеть слова</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
+
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Загрузка файла</title>
+</head>
+<body>
+    <h1>Обработчик файлов</h1>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">Загрузить и обработать</button>
+    <p id="status"></p>
+
+    <script>
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const status = document.getElementById('status');
+            if (fileInput.files.length === 0) return alert('Выберите файл');
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            status.innerText = 'Обработка...';
+
+            try {
+                // ЗАМЕНИ URL на адрес своего сервера после деплоя!
+                const response = await fetch('https://server-1-5c12.onrender.com/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Ошибка сервера');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'processed_file.csv';
+                a.click();
+                status.innerText = 'Готово!';
+            } catch (err) {
+                status.innerText = 'Ошибка: ' + err.message;
+            }
+        }
+    </script>
+</body>
+</html>
