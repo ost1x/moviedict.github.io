@@ -545,6 +545,32 @@ function showResult({ok,title,sub,downloadUrl}){
   resultEl.classList.add('show');
 }
 
+const SERVER = 'https://server-1-5c12.onrender.com';
+
+// Loading messages that cycle while processing
+const loadingMsgs = [
+  'Будим сервер…',
+  'Разбираю субтитры…',
+  'Лемматизирую слова…',
+  'Перевожу пачками…',
+  'Почти готово…'
+];
+let loadingInterval = null;
+
+function startLoadingCycle() {
+  let i = 0;
+  const loadingLabelEl = runBtnEl.querySelector('.loading-label');
+  if (loadingLabelEl) loadingLabelEl.textContent = loadingMsgs[0];
+  loadingInterval = setInterval(() => {
+    i = (i + 1) % loadingMsgs.length;
+    if (loadingLabelEl) loadingLabelEl.textContent = loadingMsgs[i];
+  }, 4000);
+}
+function stopLoadingCycle() {
+  clearInterval(loadingInterval);
+  loadingInterval = null;
+}
+
 formEl.addEventListener('submit',async e=>{
   e.preventDefault();
   const file=fileInputEl.files[0];
@@ -552,25 +578,37 @@ formEl.addEventListener('submit',async e=>{
   runBtnEl.disabled=true;
   runBtnEl.classList.add('loading');
   resultEl.classList.remove('show');
-  const fd=new FormData();
-  fd.append('file',file);
+  startLoadingCycle();
+
   try{
-    const resp=await fetch('https://server-1-5c12.onrender.com/process',{method:'POST',body:fd});
+    // Step 1: ping to wake the server (won't time out the main request)
+    try { await fetch(SERVER+'/ping', {signal: AbortSignal.timeout(15000)}); } catch(_){}
+
+    // Step 2: send the file (long timeout — processing takes time)
+    const fd=new FormData();
+    fd.append('file',file);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 min
+    const resp=await fetch(SERVER+'/process',{method:'POST',body:fd,signal:controller.signal});
+    clearTimeout(timeoutId);
+
     if(!resp.ok) throw new Error('Сервер ответил с ошибкой: '+resp.status);
     const blob=await resp.blob();
     const csvText=await blob.text();
     const url=window.URL.createObjectURL(new Blob([csvText],{type:'text/csv'}));
     showResult({ok:true,title:'Словарь готов',sub:file.name.replace(/\.[^.]+$/,'')+'.csv',downloadUrl:url});
-    // auto-download
     const a=document.createElement('a');
     a.href=url; a.download=file.name.replace(/\.[^.]+$/,'')+'_dictionary.csv';
     document.body.appendChild(a); a.click(); a.remove();
-    // load flashcards
     const movieName=file.name.replace(/\.[^.]+$/,'');
     parseCSVAndInit(csvText,movieName);
   }catch(err){
-    showResult({ok:false,title:'Не получилось обработать файл',sub:err.message||'Проверьте соединение и попробуйте снова'});
+    const msg = err.name==='AbortError'
+      ? 'Сервер не ответил вовремя — попробуйте ещё раз, он уже проснулся'
+      : (err.message||'Проверьте соединение и попробуйте снова');
+    showResult({ok:false,title:'Не получилось обработать файл',sub:msg});
   }finally{
+    stopLoadingCycle();
     runBtnEl.classList.remove('loading');
     runBtnEl.disabled=false;
   }
